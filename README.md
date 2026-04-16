@@ -195,7 +195,10 @@ Gemini handles almost any educational video. Groq is a fallback for shorter cont
 
 | Problem | Fix |
 |---------|-----|
-| `pip install` fails | Make sure `(venv)` is visible in your terminal prompt — the virtual environment isn't active |
+| `pip install` fails | Make sure `(venv)` is visible in your terminal prompt — run `source venv/bin/activate` (Mac/Linux) or `venv\Scripts\activate` (Windows) first |
+| `Form data requires "python-multipart"` error | Your virtual environment isn't active — activate it before running `uvicorn` |
+| `localhost:8000/setup` shows "Internal Server Error" | Pull the latest code and restart the server |
+| "No AI API key configured" | Open `http://localhost:8000/setup` and enter at least one AI key |
 | "Cannot reach the backend" | The `uvicorn` server isn't running — open a terminal, activate the venv, and run `uvicorn main:app --reload` |
 | Extension not showing | Make sure you selected the `extension/` subfolder, not the root folder |
 | Notion save fails | Check that your integration is connected to the database and the Database ID is correct |
