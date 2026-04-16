@@ -66,6 +66,37 @@ If you do not have Python, download it from [python.org](https://www.python.org/
 
 ## Installation
 
+### Step 0 — Install Git (if you don't have it)
+
+Git is used to download the code. Check if you already have it:
+
+```bash
+git --version
+```
+
+If you see a version number, skip to Step 1. If you get "command not found", install it:
+
+**Mac**
+```bash
+xcode-select --install
+```
+A dialog will appear — click **Install**. This installs Git as part of the Xcode Command Line Tools.
+
+**Windows**
+Download and run the installer from [git-scm.com/download/win](https://git-scm.com/download/win). Accept all defaults.
+
+**Linux (Ubuntu / Debian)**
+```bash
+sudo apt update && sudo apt install git
+```
+
+After installing, close and reopen your terminal, then run `git --version` again to confirm it worked.
+
+**Using VS Code instead?**
+You can skip Git entirely. In VS Code, press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac), type **Git: Clone**, paste the repository URL, and choose a folder. VS Code will download everything for you.
+
+---
+
 ### Step 1 — Clone the repository
 
 ```bash
