@@ -28,8 +28,10 @@ xcode-select --install
 ```
 A dialog will appear — click **Install**.
 
-**Windows**
-Download and run the installer from [git-scm.com/download/win](https://git-scm.com/download/win). Accept all defaults.
+**Windows** (run in PowerShell as Administrator)
+```powershell
+winget install --id Git.Git -e --source winget
+```
 
 **Linux (Ubuntu / Debian)**
 ```bash
