@@ -1,0 +1,23 @@
+# Environment variables — never commit real secrets
+backend/.env
+
+# YouTube cookies — contains session tokens, never commit
+backend/cookies.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
