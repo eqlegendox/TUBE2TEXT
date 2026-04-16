@@ -12,12 +12,42 @@ Converts any YouTube video into structured learning notes and saves them to Noti
 
 ---
 
+## Step 0 — Install Git (if you don't have it)
+
+Check whether Git is already installed:
+
+```bash
+git --version
+```
+
+If you see a version number, skip to Step 1. If you get "command not found", install it:
+
+**Mac**
+```bash
+xcode-select --install
+```
+A dialog will appear — click **Install**.
+
+**Windows**
+Download and run the installer from [git-scm.com/download/win](https://git-scm.com/download/win). Accept all defaults.
+
+**Linux (Ubuntu / Debian)**
+```bash
+sudo apt update && sudo apt install git
+```
+
+After installing, close and reopen your terminal, then run `git --version` to confirm.
+
+**Using VS Code?** Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac), type **Git: Clone**, and paste the repo URL — no terminal needed.
+
+---
+
 ## Step 1 — Clone the repo
 
 Open VSCode, then open the built-in terminal (`Terminal → New Terminal` or `` Ctrl+` ``).
 
 ```bash
-git clone https://github.com/dannybudiada/TUBE2TEXT.git
+git clone https://github.com/eqlegendox/TUBE2TEXT.git
 cd TUBE2TEXT
 ```
 
@@ -140,6 +170,24 @@ uvicorn main:app --reload
 ```
 
 Leave this terminal open while using the extension.
+
+---
+
+## Limitations
+
+This tool is completely free, but the free tier has real limits.
+
+| | Gemini (recommended) | Groq (fallback) |
+|---|---|---|
+| Max video length | ~9 hours | ~40 minutes |
+| Videos per day | ~10 | ~30–50 |
+
+Gemini handles almost any educational video. Groq is a fallback for shorter content only. If you hit the daily Gemini limit, the server automatically tries Groq. If both are exhausted, wait until midnight Pacific time for Gemini to reset.
+
+**This tool cannot process:**
+- Private or age-restricted videos
+- Videos with captions disabled
+- Live streams (until the stream ends and captions are processed)
 
 ---
 
