@@ -151,6 +151,41 @@ sudo apt update && sudo apt install python3 python3-pip python3-venv
 
 ---
 
+## Step 1b — Check that pip is installed
+
+pip is the tool that installs Python packages. Run this to check:
+
+```bash
+pip --version
+```
+
+On Mac/Linux, try:
+
+```bash
+pip3 --version
+```
+
+If you see a version number, move on. If you get `command not found`, install it:
+
+**Windows** (in PowerShell as Administrator):
+```powershell
+python -m ensurepip --upgrade
+```
+
+**Mac:**
+```bash
+python3 -m ensurepip --upgrade
+```
+
+**Linux (Ubuntu / Debian):**
+```bash
+sudo apt install python3-pip
+```
+
+After installing, close and reopen your terminal and run `pip --version` again to confirm.
+
+---
+
 ## Step 2 — Download TUBE2TEXT
 
 Open a terminal and run:
@@ -309,6 +344,7 @@ Gemini handles almost any educational video. Groq is a fallback for shorter cont
 | Problem | Fix |
 |---------|-----|
 | `git` not recognised after installing on Windows | Close PowerShell and open a new one. If still broken, restart your computer. |
+| `pip: command not found` | Run `python3 -m ensurepip --upgrade` (Mac/Linux) or `python -m ensurepip --upgrade` (Windows), then reopen your terminal |
 | `pip install` fails | Make sure `(venv)` is visible in your terminal prompt — run `source venv/bin/activate` (Mac/Linux) or `venv\Scripts\activate` (Windows) first |
 | `Form data requires "python-multipart"` error | Your virtual environment is not active — activate it before running `uvicorn` |
 | `localhost:8000/setup` shows "Internal Server Error" | Pull the latest code (`git pull`) and restart the server |
