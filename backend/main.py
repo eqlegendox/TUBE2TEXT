@@ -708,18 +708,19 @@ def _setup_page(flash: str = "") -> str:
     rk = os.getenv("GROQ_API_KEY", "")
     nk = os.getenv("NOTION_API_KEY", "")
     nd = os.getenv("NOTION_DATABASE_ID", "")
-    return SETUP_HTML.format(
-        gemini_dot="on" if gk else "off",
-        gemini_status="configured" if gk else "not set",
-        groq_dot="on" if rk else "off",
-        groq_status="configured" if rk else "not set",
-        notion_dot="on" if (nk and nd) else "off",
-        notion_status="configured" if (nk and nd) else "not set",
-        gemini_val=gk,
-        groq_val=rk,
-        notion_val=nk,
-        notion_db_val=nd,
-        flash=flash,
+    return (
+        SETUP_HTML
+        .replace("{gemini_dot}", "on" if gk else "off")
+        .replace("{gemini_status}", "configured" if gk else "not set")
+        .replace("{groq_dot}", "on" if rk else "off")
+        .replace("{groq_status}", "configured" if rk else "not set")
+        .replace("{notion_dot}", "on" if (nk and nd) else "off")
+        .replace("{notion_status}", "configured" if (nk and nd) else "not set")
+        .replace("{gemini_val}", gk)
+        .replace("{groq_val}", rk)
+        .replace("{notion_val}", nk)
+        .replace("{notion_db_val}", nd)
+        .replace("{flash}", flash)
     )
 
 

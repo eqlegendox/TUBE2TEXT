@@ -153,6 +153,15 @@ NOTION_DATABASE_ID=your_notion_database_id_here
 
 ## Running the server
 
+Make sure your virtual environment is **activated** before running the server, otherwise Python will not find the installed packages:
+
+```bash
+source venv/bin/activate        # Mac / Linux
+venv\Scripts\activate           # Windows
+```
+
+Then start the server:
+
 ```bash
 uvicorn main:app --reload
 ```
@@ -203,6 +212,37 @@ If `notion_page_url` is returned, your learning module is ready in Notion.
 
 ## Troubleshooting
 
+### `localhost:8000/setup` shows "Internal Server Error"
+
+This was a bug in earlier versions — restart the server after pulling the latest code and the setup page will load correctly.
+
+### "No AI API key configured. Set GEMINI_API_KEY or GROQ_API_KEY in .env"
+
+You need at least one AI API key in your `.env` file. Either:
+
+- Open the setup page at `http://localhost:8000/setup` and enter your keys there, **or**
+- Open `.env` and set `GEMINI_API_KEY` to your Google AI Studio key (free at [aistudio.google.com](https://aistudio.google.com/app/apikey))
+
+After saving the keys, restart the server.
+
+If you do not have a `.env` file yet, create one from the template:
+
+```bash
+cp .env.example .env
+```
+
+Then open `.env` and fill in your keys.
+
+### `RuntimeError: Form data requires "python-multipart" to be installed`
+
+This means the server is running with the wrong Python — your virtual environment is not active. Stop the server, activate the venv, then restart:
+
+```bash
+source venv/bin/activate        # Mac / Linux
+venv\Scripts\activate           # Windows
+uvicorn main:app --reload
+```
+
 ### "Transcripts are disabled for this video"
 Some YouTube videos have transcripts turned off by the creator. There is no workaround — try a different video.
 
@@ -221,6 +261,37 @@ The video may not have captions. Try enabling auto-generated captions on YouTube
 ### Gemini API errors
 - Make sure your `GEMINI_API_KEY` is correct in `.env`
 - The free tier has rate limits — if you process many videos quickly, wait a minute and retry
+
+---
+
+## Limitations
+
+This tool is entirely free but that comes with real constraints.
+
+### Video length
+
+| AI Provider | Max video length (approx) | Why |
+|---|---|---|
+| Gemini 2.0 Flash (recommended) | ~9 hours | Capped at 400,000 characters of transcript |
+| Groq fallback | ~40 minutes | Capped at 32,000 characters of transcript |
+
+Almost all educational YouTube videos fall well within the Gemini limit. The Groq fallback is only suitable for shorter content — lectures, tutorials under 40 minutes.
+
+### How many videos per day
+
+| AI Provider | Daily limit (approx) | Notes |
+|---|---|---|
+| Gemini 2.0 Flash | ~10 full-length videos | 1M tokens/day on the free tier |
+| Groq fallback | ~30–50 videos | Higher RPM but shorter context |
+
+For personal use, 10 videos/day is more than enough. If you hit the Gemini daily limit the server will automatically try Groq. If both are exhausted, you will see a rate limit error — wait until midnight Pacific time for Gemini to reset.
+
+### What this tool cannot do
+
+- **Private or age-restricted videos** — transcripts are not accessible without authentication
+- **Videos with no captions** — auto-generated or manual captions must be enabled on the video
+- **Non-English videos** — the AI prompt is written in English; non-English transcripts will produce degraded output
+- **Real-time or live streams** — no transcript is available until the stream ends and captions are processed
 
 ---
 
