@@ -24,7 +24,18 @@ python3 --version
 ```
 Not installed? Download it from [python.org/downloads](https://www.python.org/downloads/). On Windows, check **"Add Python to PATH"** during install.
 
-**3. Google Chrome** — just needs to be installed, no setup needed.
+**3. pip** (comes with Python, but worth checking)
+```bash
+pip --version
+```
+If you get `command not found`, run this and reopen your terminal:
+
+- **Mac / Linux:** `python3 -m ensurepip --upgrade`
+- **Windows:** `python -m ensurepip --upgrade`
+
+If that still doesn't work on Linux: `sudo apt install python3-pip`
+
+**4. Google Chrome** — just needs to be installed, no setup needed.
 
 ---
 
