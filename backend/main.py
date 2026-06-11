@@ -62,6 +62,11 @@ NOTION_BLOCK_CHUNK_SIZE = 100
 class SummarizeRequest(BaseModel):
     video_id: str
     video_title: str = ""
+    # Optional per-request BYOK keys — take priority over server env vars
+    gemini_api_key: str | None = None
+    groq_api_key: str | None = None
+    notion_api_key: str | None = None
+    notion_database_id: str | None = None
 
 
 class KeyTerm(BaseModel):
@@ -211,15 +216,16 @@ def _clean_json(raw: str) -> str:
     return raw.strip()
 
 
-def generate_with_gemini(transcript: str, video_title: str) -> dict:
+def generate_with_gemini(transcript: str, video_title: str, client=None) -> dict:
     """Call Gemini 2.0 Flash to produce the learning module JSON."""
     from google.genai import types as genai_types
 
+    _client = client or gemini_client
     prompt = LEARNING_MODULE_PROMPT.format(
         title=video_title or "Educational Video",
         transcript=transcript,
     )
-    response = gemini_client.models.generate_content(
+    response = _client.models.generate_content(
         model="gemini-2.0-flash",
         contents=prompt,
         config=genai_types.GenerateContentConfig(
@@ -237,14 +243,15 @@ def generate_with_gemini(transcript: str, video_title: str) -> dict:
         )
 
 
-def generate_with_groq(transcript: str, video_title: str) -> dict:
+def generate_with_groq(transcript: str, video_title: str, client=None) -> dict:
     """Fallback: call Groq (llama-3.3-70b) when Gemini is not configured.
     Uses the same prompt structure but is limited to 32k chars of transcript."""
+    _client = client or groq_client
     prompt = LEARNING_MODULE_PROMPT.format(
         title=video_title or "Educational Video",
         transcript=transcript,
     )
-    response = groq_client.chat.completions.create(
+    response = _client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
@@ -453,30 +460,39 @@ def build_notion_blocks(module: dict, video_id: str) -> list[dict]:
     return blocks
 
 
-def append_blocks_chunked(page_id: str, blocks: list[dict]) -> None:
+def append_blocks_chunked(page_id: str, blocks: list[dict], client: NotionClient) -> None:
     """Append blocks to a Notion page in chunks of 100 (API hard limit)."""
     for i in range(0, len(blocks), NOTION_BLOCK_CHUNK_SIZE):
         chunk = blocks[i:i + NOTION_BLOCK_CHUNK_SIZE]
-        notion_client.blocks.children.append(block_id=page_id, children=chunk)
+        client.blocks.children.append(block_id=page_id, children=chunk)
 
 
-def save_to_notion(module: dict, video_id: str) -> tuple[str | None, str | None]:
-    """Create a Notion page with the full learning module. Returns (url, error)."""
-    if not NOTION_DATABASE_ID or NOTION_DATABASE_ID == "your_notion_database_id_here":
-        return None, "NOTION_DATABASE_ID not configured in .env"
+def save_to_notion(
+    module: dict,
+    video_id: str,
+    notion_key: str = "",
+    notion_db_id: str = "",
+) -> tuple[str | None, str | None]:
+    """Create a Notion page with the full learning module. Returns (url, error).
+    Uses provided keys if given, otherwise falls back to env vars."""
+    _notion_key = notion_key or os.getenv("NOTION_API_KEY", "")
+    _notion_db_id = notion_db_id or NOTION_DATABASE_ID
 
-    notion_api_key = os.getenv("NOTION_API_KEY", "")
-    if not notion_api_key or notion_api_key == "your_notion_integration_token_here":
-        return None, "NOTION_API_KEY not configured in .env"
+    if not _notion_db_id or _notion_db_id == "your_notion_database_id_here":
+        return None, "NOTION_DATABASE_ID not configured"
 
+    if not _notion_key or _notion_key == "your_notion_integration_token_here":
+        return None, "NOTION_API_KEY not configured"
+
+    _client = NotionClient(auth=_notion_key)
     title = module.get("video_title", "YouTube Learning Module")
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     blocks = build_notion_blocks(module, video_id)
 
     try:
         # Create the page with no children first (avoids the 100-block limit on page create)
-        response = notion_client.pages.create(
-            parent={"database_id": NOTION_DATABASE_ID},
+        response = _client.pages.create(
+            parent={"database_id": _notion_db_id},
             properties={
                 "title": {"title": [{"type": "text", "text": {"content": title}}]},
                 "Date Reviewed": {"date": {"start": today}},
@@ -486,7 +502,7 @@ def save_to_notion(module: dict, video_id: str) -> tuple[str | None, str | None]
         page_id = response["id"]
 
         # Append all blocks in chunks of 100
-        append_blocks_chunked(page_id, blocks)
+        append_blocks_chunked(page_id, blocks, _client)
 
         return response.get("url"), None
 
@@ -501,13 +517,29 @@ def save_to_notion(module: dict, video_id: str) -> tuple[str | None, str | None]
 
 @app.post("/summarize", response_model=LearningModuleResponse)
 async def summarize(request: SummarizeRequest):
-    if not gemini_client and not groq_client:
+    # Resolve AI clients: per-request BYOK keys take priority over global env vars
+    active_gemini = None
+    active_groq = None
+
+    if request.gemini_api_key:
+        from google import genai as _google_genai
+        active_gemini = _google_genai.Client(api_key=request.gemini_api_key)
+    else:
+        active_gemini = gemini_client
+
+    if request.groq_api_key:
+        from groq import Groq
+        active_groq = Groq(api_key=request.groq_api_key)
+    else:
+        active_groq = groq_client
+
+    if not active_gemini and not active_groq:
         raise HTTPException(
             status_code=500,
-            detail="No AI API key configured. Set GEMINI_API_KEY or GROQ_API_KEY in .env",
+            detail="No AI API key configured. Provide gemini_api_key or groq_api_key in the request, or set GEMINI_API_KEY / GROQ_API_KEY in server env.",
         )
 
-    use_gemini = gemini_client is not None
+    use_gemini = active_gemini is not None
 
     # 1. Fetch transcript
     transcript_text, was_truncated = fetch_transcript(request.video_id, use_gemini)
@@ -515,9 +547,9 @@ async def summarize(request: SummarizeRequest):
     # 2. Generate learning module (Gemini preferred, Groq fallback)
     if use_gemini:
         try:
-            module = generate_with_gemini(transcript_text, request.video_title)
+            module = generate_with_gemini(transcript_text, request.video_title, client=active_gemini)
         except Exception as e:
-            if groq_client is None:
+            if active_groq is None:
                 raise HTTPException(
                     status_code=429,
                     detail=f"Gemini failed and no Groq fallback configured: {e}",
@@ -527,12 +559,17 @@ async def summarize(request: SummarizeRequest):
                 cutoff = transcript_text.rfind("\n", 0, MAX_TRANSCRIPT_CHARS_GROQ)
                 transcript_text = transcript_text[:cutoff if cutoff != -1 else MAX_TRANSCRIPT_CHARS_GROQ]
                 was_truncated = True
-            module = generate_with_groq(transcript_text, request.video_title)
+            module = generate_with_groq(transcript_text, request.video_title, client=active_groq)
     else:
-        module = generate_with_groq(transcript_text, request.video_title)
+        module = generate_with_groq(transcript_text, request.video_title, client=active_groq)
 
-    # 3. Save to Notion
-    notion_url, notion_error = save_to_notion(module, request.video_id)
+    # 3. Save to Notion (uses per-request keys if provided, falls back to env vars)
+    notion_url, notion_error = save_to_notion(
+        module,
+        request.video_id,
+        notion_key=request.notion_api_key or "",
+        notion_db_id=request.notion_database_id or "",
+    )
 
     return LearningModuleResponse(
         video_id=request.video_id,
@@ -738,18 +775,20 @@ async def setup_post(
 ):
     global gemini_client, groq_client, notion_client, NOTION_DATABASE_ID
 
-    # Write .env file next to main.py
-    env_path = Path(__file__).parent / ".env"
-    lines = []
-    if gemini_key.strip():
-        lines.append(f"GEMINI_API_KEY={gemini_key.strip()}")
-    if groq_key.strip():
-        lines.append(f"GROQ_API_KEY={groq_key.strip()}")
-    if notion_key.strip():
-        lines.append(f"NOTION_API_KEY={notion_key.strip()}")
-    if notion_db_id.strip():
-        lines.append(f"NOTION_DATABASE_ID={notion_db_id.strip()}")
-    env_path.write_text("\n".join(lines) + "\n")
+    # On Railway the filesystem is ephemeral — skip .env write and rely on Railway dashboard env vars.
+    # In-memory hot-reload below still applies on both platforms.
+    if not os.getenv("RAILWAY_ENVIRONMENT"):
+        env_path = Path(__file__).parent / ".env"
+        lines = []
+        if gemini_key.strip():
+            lines.append(f"GEMINI_API_KEY={gemini_key.strip()}")
+        if groq_key.strip():
+            lines.append(f"GROQ_API_KEY={groq_key.strip()}")
+        if notion_key.strip():
+            lines.append(f"NOTION_API_KEY={notion_key.strip()}")
+        if notion_db_id.strip():
+            lines.append(f"NOTION_DATABASE_ID={notion_db_id.strip()}")
+        env_path.write_text("\n".join(lines) + "\n")
 
     # Hot-reload into os.environ so the running server picks up the new values immediately
     for key, val in [
