@@ -9,6 +9,7 @@
   ],
   "host_permissions": [
     "https://www.youtube.com/*",
+    "https://tube2text-production.up.railway.app/*",
     "http://localhost:8000/*"
   ],
   "action": {

@@ -1,5 +1,5 @@
-// TODO: Replace with your Railway backend URL after deployment (e.g. "https://tubeintel.railway.app")
-const BACKEND_URL = "http://localhost:8000";
+// Live Railway backend. For local dev, change to "http://localhost:8000".
+const BACKEND_URL = "https://tube2text-production.up.railway.app";
 
 // ── State management ──────────────────────────────────────────────────────────
 
