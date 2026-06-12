@@ -50,11 +50,14 @@ Go to your Railway service → **Variables** tab → add each key:
 
 | Variable | Value |
 |---|---|
+| `SUPADATA_API_KEY` | Supadata API key — fetches YouTube transcripts |
 | `GEMINI_API_KEY` | Your Gemini API key |
 | `GROQ_API_KEY` | Your Groq API key (optional) |
 | `NOTION_API_KEY` | Your Notion integration token (optional) |
 | `NOTION_DATABASE_ID` | Your Notion database ID (optional) |
 | `YOUTUBE_DATA_API_KEY` | YouTube Data API v3 key — enables /discover recommendations |
+| `ALLOWED_ORIGINS` | Your Vercel URL e.g. `https://your-app.vercel.app` — restricts CORS |
+| `SETUP_TOKEN` | Random secret (e.g. `openssl rand -hex 16`) — protects the `/setup` page |
 
 Railway automatically sets `PORT` and `RAILWAY_ENVIRONMENT` — do not add these yourself.
 

@@ -3,25 +3,34 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Form
+from fastapi import FastAPI, HTTPException, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+import requests
 from notion_client import Client as NotionClient
 
 load_dotenv()
 
 app = FastAPI(title="YouTube Learning Module Generator")
 
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # --- AI client setup ---
 # Gemini 2.0 Flash is the primary AI (free, 1M token context — handles any video length).
@@ -30,7 +39,9 @@ app.add_middleware(
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+SETUP_TOKEN = os.getenv("SETUP_TOKEN", "")
 YOUTUBE_DATA_API_KEY = os.getenv("YOUTUBE_DATA_API_KEY", "")
+SUPADATA_API_KEY = os.getenv("SUPADATA_API_KEY", "")
 
 groq_client = None
 
@@ -177,23 +188,41 @@ def format_timestamp(seconds: float) -> str:
 
 
 def fetch_transcript(video_id: str, use_gemini: bool) -> tuple[str, bool]:
-    """Fetch transcript. Returns (text, was_truncated).
-    Applies a higher char limit when Gemini is available."""
+    """Fetch transcript via Supadata API. Returns (text, was_truncated)."""
+    if not SUPADATA_API_KEY:
+        raise HTTPException(status_code=503, detail="SUPADATA_API_KEY not configured on server.")
     try:
-        api = YouTubeTranscriptApi()
-        transcript = api.fetch(video_id)
-    except TranscriptsDisabled:
-        raise HTTPException(status_code=422, detail="Transcripts are disabled for this video.")
-    except NoTranscriptFound:
-        raise HTTPException(status_code=422, detail="No transcript found for this video.")
-    except Exception as e:
+        resp = requests.get(
+            "https://api.supadata.ai/v1/youtube/transcript",
+            params={"videoId": video_id},
+            headers={"x-api-key": SUPADATA_API_KEY},
+            timeout=30,
+        )
+    except requests.RequestException as e:
         raise HTTPException(status_code=502, detail=f"Failed to fetch transcript: {e}")
 
-    lines = [
-        f"[{format_timestamp(s.start)}] {s.text.replace(chr(10), ' ')}"
-        for s in transcript
-    ]
-    full_text = "\n".join(lines)
+    if resp.status_code == 404:
+        raise HTTPException(status_code=422, detail="No transcript found for this video.")
+    if resp.status_code == 403:
+        raise HTTPException(status_code=422, detail="Transcripts are disabled for this video.")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Transcript service error: {resp.status_code}")
+
+    data = resp.json()
+    content = data.get("content", [])
+
+    if isinstance(content, str):
+        full_text = content
+    else:
+        lines = [
+            f"[{format_timestamp(seg['offset'] / 1000)}] {seg['text'].replace(chr(10), ' ')}"
+            for seg in content
+            if seg.get("text")
+        ]
+        full_text = "\n".join(lines)
+
+    if not full_text.strip():
+        raise HTTPException(status_code=422, detail="No transcript found for this video.")
 
     limit = MAX_TRANSCRIPT_CHARS_GEMINI if use_gemini else MAX_TRANSCRIPT_CHARS_GROQ
     if len(full_text) > limit:
@@ -542,6 +571,9 @@ async def summarize(request: SummarizeRequest):
 
     use_gemini = active_gemini is not None
 
+    if not re.match(r'^[a-zA-Z0-9_-]{11}$', request.video_id):
+        raise HTTPException(status_code=400, detail="Invalid video_id. Expected an 11-character YouTube video ID.")
+
     # 1. Fetch transcript
     transcript_text, was_truncated = fetch_transcript(request.video_id, use_gemini)
 
@@ -788,7 +820,8 @@ class VideoRecommendation(BaseModel):
 
 
 @app.get("/recommend", response_model=list[VideoRecommendation])
-async def recommend(topic: str = ""):
+@limiter.limit("10/minute")
+async def recommend(request: Request, topic: str = ""):
     if not YOUTUBE_DATA_API_KEY:
         raise HTTPException(status_code=503, detail="YOUTUBE_DATA_API_KEY not configured on server.")
     if not topic.strip():
@@ -860,7 +893,9 @@ async def recommend(topic: str = ""):
 
 
 @app.get("/setup", response_class=HTMLResponse)
-async def setup_get():
+async def setup_get(x_setup_token: str = Header(default="")):
+    if SETUP_TOKEN and x_setup_token != SETUP_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")
     return _setup_page()
 
 
@@ -870,7 +905,11 @@ async def setup_post(
     groq_key: str = Form(default=""),
     notion_key: str = Form(default=""),
     notion_db_id: str = Form(default=""),
+    x_setup_token: str = Header(default=""),
 ):
+    if SETUP_TOKEN and x_setup_token != SETUP_TOKEN:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     global gemini_client, groq_client, notion_client, NOTION_DATABASE_ID
 
     # On Railway the filesystem is ephemeral — skip .env write and rely on Railway dashboard env vars.
