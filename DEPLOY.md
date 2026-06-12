@@ -54,6 +54,7 @@ Go to your Railway service → **Variables** tab → add each key:
 | `GROQ_API_KEY` | Your Groq API key (optional) |
 | `NOTION_API_KEY` | Your Notion integration token (optional) |
 | `NOTION_DATABASE_ID` | Your Notion database ID (optional) |
+| `YOUTUBE_DATA_API_KEY` | YouTube Data API v3 key — enables /discover recommendations |
 
 Railway automatically sets `PORT` and `RAILWAY_ENVIRONMENT` — do not add these yourself.
 

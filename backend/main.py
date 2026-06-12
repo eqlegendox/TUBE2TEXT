@@ -30,6 +30,7 @@ app.add_middleware(
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+YOUTUBE_DATA_API_KEY = os.getenv("YOUTUBE_DATA_API_KEY", "")
 
 groq_client = None
 
@@ -759,6 +760,103 @@ def _setup_page(flash: str = "") -> str:
         .replace("{notion_db_val}", nd)
         .replace("{flash}", flash)
     )
+
+
+def _parse_iso_duration(iso: str) -> int:
+    h = int(re.search(r'(\d+)H', iso).group(1)) if re.search(r'(\d+)H', iso) else 0
+    m = int(re.search(r'(\d+)M', iso).group(1)) if re.search(r'(\d+)M', iso) else 0
+    s = int(re.search(r'(\d+)S', iso).group(1)) if re.search(r'(\d+)S', iso) else 0
+    return h * 3600 + m * 60 + s
+
+
+def _format_duration(total_seconds: int) -> str:
+    h = total_seconds // 3600
+    m = (total_seconds % 3600) // 60
+    s = total_seconds % 60
+    return f"{h}:{m:02d}:{s:02d}" if h > 0 else f"{m}:{s:02d}"
+
+
+class VideoRecommendation(BaseModel):
+    video_id: str
+    title: str
+    channel_name: str
+    thumbnail_url: str
+    duration_seconds: int
+    duration_formatted: str
+    view_count: int
+    youtube_url: str
+
+
+@app.get("/recommend", response_model=list[VideoRecommendation])
+async def recommend(topic: str = ""):
+    if not YOUTUBE_DATA_API_KEY:
+        raise HTTPException(status_code=503, detail="YOUTUBE_DATA_API_KEY not configured on server.")
+    if not topic.strip():
+        raise HTTPException(status_code=400, detail="topic is required.")
+
+    import httpx
+    async with httpx.AsyncClient(timeout=10) as client:
+        search_resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "part": "snippet",
+                "type": "video",
+                "q": topic.strip(),
+                "maxResults": 15,
+                "order": "relevance",
+                "relevanceLanguage": "en",
+                "key": YOUTUBE_DATA_API_KEY,
+            }
+        )
+        if search_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="YouTube search failed.")
+        search_data = search_resp.json()
+        video_ids = [item["id"]["videoId"] for item in search_data.get("items", [])]
+        if not video_ids:
+            return []
+
+        videos_resp = await client.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={
+                "part": "contentDetails,statistics",
+                "id": ",".join(video_ids),
+                "key": YOUTUBE_DATA_API_KEY,
+            }
+        )
+        if videos_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="YouTube video details failed.")
+        videos_data = {v["id"]: v for v in videos_resp.json().get("items", [])}
+
+    results: list[VideoRecommendation] = []
+    for item in search_data.get("items", []):
+        vid = item["id"]["videoId"]
+        details = videos_data.get(vid)
+        if not details:
+            continue
+        secs = _parse_iso_duration(details["contentDetails"]["duration"])
+        if secs < 300:
+            continue
+        snippet = item["snippet"]
+        thumbnails = snippet.get("thumbnails", {})
+        thumbnail_url = (
+            thumbnails.get("high", {}).get("url") or
+            thumbnails.get("medium", {}).get("url") or
+            thumbnails.get("default", {}).get("url", "")
+        )
+        results.append(VideoRecommendation(
+            video_id=vid,
+            title=snippet["title"],
+            channel_name=snippet["channelTitle"],
+            thumbnail_url=thumbnail_url,
+            duration_seconds=secs,
+            duration_formatted=_format_duration(secs),
+            view_count=int(details["statistics"].get("viewCount", 0)),
+            youtube_url=f"https://www.youtube.com/watch?v={vid}",
+        ))
+        if len(results) == 8:
+            break
+
+    return results
 
 
 @app.get("/setup", response_class=HTMLResponse)

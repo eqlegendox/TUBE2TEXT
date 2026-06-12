@@ -50,3 +50,14 @@ export interface UserKeys {
   notion_api_key: string | null
   notion_database_id: string | null
 }
+
+export interface VideoRecommendation {
+  video_id: string
+  title: string
+  channel_name: string
+  thumbnail_url: string
+  duration_seconds: number
+  duration_formatted: string
+  view_count: number
+  youtube_url: string
+}

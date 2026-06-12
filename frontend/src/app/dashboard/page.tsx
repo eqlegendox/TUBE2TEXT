@@ -23,6 +23,7 @@ export default async function DashboardPage() {
             <span style={{ fontSize: 18, fontWeight: 700 }}>Tube<span style={{ color: '#ff4444' }}>Intel</span></span>
           </Link>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <Link href="/discover" style={{ fontSize: 13, color: '#888', textDecoration: 'none' }}>Discover</Link>
             <Link href="/settings/keys" style={{ fontSize: 13, color: '#888', textDecoration: 'none' }}>API Keys</Link>
             <SignOutButton />
           </div>
