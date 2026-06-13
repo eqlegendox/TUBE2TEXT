@@ -14,6 +14,13 @@ export default async function DashboardPage() {
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
+  const { data: userKeys } = await supabase
+    .from('user_keys')
+    .select('gemini_api_key')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const hasKeys = !!userKeys?.gemini_api_key
   const hasModules = modules && modules.length > 0
   const totalSections = hasModules
     ? (modules as SavedModule[]).reduce((sum, m) => sum + (m.summary?.sections?.length ?? 0), 0)
@@ -58,6 +65,43 @@ export default async function DashboardPage() {
             + New Module
           </Link>
         </div>
+
+        {!hasKeys && (
+          <div style={{
+            background: 'rgba(255,68,68,0.06)',
+            border: '1px solid rgba(255,68,68,0.25)',
+            borderRadius: 12,
+            padding: '18px 24px',
+            marginBottom: 28,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>Set up your API keys to get started</div>
+              <div style={{ color: '#888', fontSize: 13 }}>
+                TubeIntel needs a Gemini API key to generate learning modules. It&apos;s free and takes 30 seconds.
+              </div>
+            </div>
+            <Link
+              href="/settings/keys"
+              style={{
+                background: '#ff4444',
+                color: '#fff',
+                textDecoration: 'none',
+                padding: '9px 18px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              Set Up Keys →
+            </Link>
+          </div>
+        )}
 
         {!hasModules ? (
           <div style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 14, padding: '60px 24px', textAlign: 'center' }}>
